@@ -1,0 +1,218 @@
+---
+title: "Homework 4"
+author: "Chunjin Ruan"
+date: "Due by 2:20 pm, Fri. 2/15"
+output: github_document
+        
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, error = TRUE)
+```
+
+
+Push your knitted homework assignment (.Rmd and .md files) to GitHub by the given deadline.
+
+Also let me know: 
+
+**Who you worked with:**
+
+### Problem 1
+The vector called `words` in `stringr` contains a corpus of 980 words used in text analysis.  Use regular expressions with `stringr` to find the words that satisfy the following descriptions: 
+
+- begin with `b`
+- contain `q`, `x`, or `z`
+- contain `th` or `ch`
+- end with `g` but not `ng`
+- are 10 letters long
+- have 3 or more vowels in a row
+- start and end with the same letter
+
+```{r}
+library(tidyverse)
+library(readr)
+library(stringr)
+library(rvest)
+library(ggrepel)
+```
+####begin with `b`
+```{r}
+words %>%
+  subset(str_detect(words, "^b"))
+```
+####contain `q`, `x`, `z`
+```{r}
+words %>%
+  subset(str_detect(words, "q|x|z"))
+```
+####contain `th` or `ch`
+```{r}
+words %>%
+  subset(str_detect(words, "th|ch"))
+```
+#### end with `g` but not `ng`
+```{r}
+words %>%
+  subset(str_detect(words, "[^n]g$"))
+```
+####are 10 letters long
+```{r}
+words %>%
+  subset(str_detect(words, "^.{10}$"))
+```
+####have 3 or more vowels in a row
+```{r}
+words %>%
+  subset(str_detect(words,"[aeiouy]{3,}"))
+```
+####start and end with the same letter
+```{r}
+words %>%
+  subset(str_detect(words, "^(.).*\\1$"))
+```
+
+
+### Problem 2
+
+Revisit the `words` vector. What word, or words, in this vector has the highest number of vowels? What word has the highest proportion of vowels?
+
+```{r}
+library(stringr)
+words <- as.tibble(words)
+words %>%
+  mutate(vowels = str_count(value, "[aeiouy]")) %>%
+  filter(vowels == max(vowels)) 
+```
+**Answer** appropriate, associate, authority, available, colleague, encourage, experience, individual, opportunity, television are the highest number of vowels. 
+```{r}
+words %>%
+  mutate(vowels = str_count(value, "[aeiouy]")) %>%
+  mutate(prop_vowels = vowels /str_length(value)) %>%
+  arrange(desc(prop_vowels))
+```
+**Answer** a, eye, you are the highest number of vowels. 
+### Problem 3
+
+(Combining exercise 15.6 and 15.7)
+
+Project Gutenberg contains the full text of *The Complete Works of William Shakespeare*. (http://www.gutenberg.org/files/100/100-0.txt)
+
+
+**(a)** Use the `read_lines()` in **readr** to import the text data.
+```{r}
+shakespeare <-read_lines("http://www.gutenberg.org/files/100/100-0.txt")
+```
+
+**(b)** Use regular expressions to determine the number of speaking lines in *The Complete Works of William Shakespeare*.  Speaking lines in Shakespeare’s plays are identified by a line that starts with two spaces, then a string of capital letters and spaces (the character’s name) followed by a period. Here, we care only about how many times a character speaks—not what they say or for how long they speak.
+
+```{r}
+lines <-shakespeare %>%
+  subset(str_detect(shakespeare, "^\\s\\s[A-Z]+[A-Z\\s]+[.]"))
+length(lines)
+```
+**Answer** There are 19965 speaking lines in Shakespeare's plays are identified.
+
+**(c)** Make a bar chart displaying the top 100 characters with the greatest number of lines. *Hint:* you may want to use either the `str extract()`.
+####Extract names and find the occurrance of the names 
+```{r}
+shakespeare <-as_tibble(shakespeare)
+shakespeare %>%
+  filter(str_detect(value, "^\\s\\s[A-Z]+[A-Z ]+[.]")) %>%
+  separate(value, into = c("name", "line"), sep = "[.]") %>%
+  group_by(name) %>%
+  summarize(count = n()) %>%
+  arrange(desc(count)) %>%
+  slice(1:100) %>%
+  ggplot(aes(x = fct_reorder(name, -count), y = count)) +
+  geom_col() +
+  labs(title = "The top 100 characters with the greatest number of lines", x = "character", y = "number of lines")
+  
+```
+
+### Problem 4
+
+Scrape the table of data found at https://en.wikipedia.org/wiki/List_of_United_States_cities_by_crime_rate and create a plot showing violent crime rate (total violent crime) vs. property crime rate (total property crime).  Identify outlier cities by using a plotting command such as:
+
+```{r}
+#Load data
+tables <-read_html("https://en.wikipedia.org/wiki/List_of_United_States_cities_by_crime_rate") %>%
+  html_nodes("table") 
+#Check the tables
+crimes_table1 <- html_table(tables[[1]])
+crimes_table2 <- html_table(tables[[2]], fill = TRUE)
+crimes_table3 <- html_table(tables[[3]])
+
+crime <-crimes_table2[c(1,2,4,9)]
+crime <- crime %>%
+  as.tibble() %>%
+  slice(-1) %>% 
+  rename(vio_crime = "Violent Crime",
+         prop_crime = "Property Crime")
+crime$vio_crime <- as.numeric(crime$vio_crime)
+crime$prop_crime <- as.numeric(crime$prop_crime)
+```
+
+```{r}
+ggplot(crime, aes(x = vio_crime, y = prop_crime, label = City)) +
+    geom_point() +
+    geom_label_repel(data=subset(crime, vio_crime > 1500 | prop_crime > 6500), 
+              check_overlap = TRUE, size = 2.5, nudge_y = 200) + 
+    labs(title = "Violent crime rate vs. property crime rate", x = "violent crime rate", y = "property crime rate")
+```
+
+Hints:
+
+- after reading in the table using `html_table()`, create a data frame with just the columns you want using column numbers.  Otherwise, R gets confused since it appears as if several columns all have the same column name.
+- then, turn `crimes` into a tibble with `as.tibble(crimes3)` and do necessary tidying: get rid of unneeded rows, parse columns into proper format, etc.
+
+Alternatives to `geom_text()`:
+
+If you want to try something new, check out the **ggrepel** package to label the outliers.
+
+### Problem 5
+
+Scrape the data from IMDB's top grossing films released in 2018 at https://www.imdb.com/search/title?year=2018&title_type=feature&sort=boxoffice_gross_us,desc.  Create a tibble that contains the title, gross, imdbscore, and metascore for the top 50 films.  Then generate a scatterplot of one of the ratings vs. gross, labeling outliers as in Problem 4 with the title of the movie.
+
+```{r}
+website <- read_html("https://www.imdb.com/search/title?year=2018&title_type=feature&sort=boxoffice_gross_us,desc") 
+movie_title <- website %>%
+  html_nodes(".lister-item-header") %>%
+  html_text() %>%
+  parse_character()
+
+movie_gross <- website %>%
+  html_nodes(".sort-num_votes-visible") %>%
+  html_text() 
+
+movie_imdbscore <- website %>%
+  html_nodes(".ratings-bar") %>%
+  html_text()
+
+movie_info <- tibble(
+  title = movie_title,
+  gross = movie_gross,
+  imdbscore = movie_imdbscore
+)
+
+movie_info1 <-movie_info %>%
+  separate(title, into = c("title", "year"), sep = "[(]\\d{4}") %>%
+  separate(gross, into = c("vote", "gross"), sep = "[$]") %>%
+  separate(imdbscore, into = c("imdbscore", "metascore"), sep = "Rate") %>%
+  separate(metascore, into = c("what", "metascore"), sep = "X") %>%
+  mutate(title = str_remove_all(title, "\n"),
+         title = str_trim(title),
+         gross = parse_number(gross),
+         imdbscore = parse_number(imdbscore),
+         metascore = parse_number(metascore)
+         )
+movie_info1 %>%
+  separate(title, into = c("number", "title"), sep = "[.]") %>%
+  ggplot(aes(x = imdbscore, y = gross)) +
+  geom_point() +
+  geom_label_repel(data=subset(movie_info1, imdbscore > 8 | gross > 450),
+                   aes(label = title),
+              check_overlap = TRUE, size = 2.5, nudge_y = 2) +
+  labs(title = "The scatterplot of imdbscore by gross income",y = "Gross income(in millions)", x = "imdb score")
+```
+
+
